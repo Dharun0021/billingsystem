@@ -25,6 +25,8 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { foodItems as initialItems, categories, type FoodItem } from "@/lib/data"
 import { Pencil, Trash2, Plus, ImageIcon } from "lucide-react"
+import { useEffect } from "react"
+import { api } from "@/lib/api"
 
 export function FoodItemsPage() {
   const [items, setItems] = useState<FoodItem[]>(initialItems)
@@ -36,10 +38,34 @@ export function FoodItemsPage() {
     description: "",
   })
 
-  const addItem = () => {
+  const fetchItems = async () => {
+    try {
+      const res = await api.menu.getItems()
+      if (res.success && res.items && res.items.length > 0) {
+        setItems(
+          res.items.map((i) => ({
+            id: i.id || i._id,
+            name: i.name,
+            price: i.price,
+            category: i.category,
+            available: i.available !== undefined ? i.available : true,
+            description: i.description || "",
+            image: i.image || "/placeholder.svg",
+          }))
+        )
+      }
+    } catch (err) {
+      console.warn("Could not fetch food items from API, using local state:", err)
+    }
+  }
+
+  useEffect(() => {
+    fetchItems()
+  }, [])
+
+  const addItem = async () => {
     if (!form.name.trim() || !form.price || !form.category) return
-    const newItem: FoodItem = {
-      id: String(Date.now()),
+    const newItemData = {
       name: form.name.trim(),
       price: parseFloat(form.price),
       category: form.category,
@@ -47,13 +73,53 @@ export function FoodItemsPage() {
       description: form.description,
       image: "/placeholder.svg",
     }
+
+    try {
+      const res = await api.menu.createItem(newItemData)
+      if (res.success && res.item) {
+        const created: FoodItem = {
+          id: res.item.id || res.item._id,
+          name: res.item.name,
+          price: res.item.price,
+          category: res.item.category,
+          available: res.item.available,
+          description: res.item.description || "",
+          image: res.item.image || "/placeholder.svg",
+        }
+        setItems([...items, created])
+        setForm({ name: "", price: "", category: "", available: true, description: "" })
+        return
+      }
+    } catch (err) {
+      console.warn("API createItem failed, adding locally:", err)
+    }
+
+    const newItem: FoodItem = {
+      id: String(Date.now()),
+      ...newItemData,
+    }
     setItems([...items, newItem])
     setForm({ name: "", price: "", category: "", available: true, description: "" })
   }
 
-  const deleteItem = (id: string) => setItems(items.filter((i) => i.id !== id))
+  const deleteItem = async (id: string) => {
+    try {
+      await api.menu.deleteItem(id)
+    } catch (err) {
+      console.warn("API deleteItem failed, deleting locally:", err)
+    }
+    setItems(items.filter((i) => i.id !== id))
+  }
 
-  const toggleAvailability = (id: string) => {
+  const toggleAvailability = async (id: string) => {
+    const target = items.find((i) => i.id === id)
+    if (target) {
+      try {
+        await api.menu.updateItem(id, { available: !target.available })
+      } catch (err) {
+        console.warn("API updateItem failed:", err)
+      }
+    }
     setItems(items.map((i) => (i.id === id ? { ...i, available: !i.available } : i)))
   }
 

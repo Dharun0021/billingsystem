@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/table"
 import { categories as initialCategories, type Category } from "@/lib/data"
 import { Pencil, Trash2, Plus, Check, X } from "lucide-react"
+import { useEffect } from "react"
+import { api } from "@/lib/api"
 
 export function CategoriesPage() {
   const [cats, setCats] = useState<Category[]>(initialCategories)
@@ -21,9 +23,40 @@ export function CategoriesPage() {
   const [editId, setEditId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
 
-  const addCategory = () => {
+  useEffect(() => {
+    api.menu.getCategories().then((res) => {
+      if (res.success && res.categories && res.categories.length > 0) {
+        setCats(
+          res.categories.map((c) => ({
+            id: c.id || c._id,
+            name: c.name,
+            itemCount: c.itemCount || 0,
+          }))
+        )
+      }
+    }).catch(() => {})
+  }, [])
+
+  const addCategory = async () => {
     if (!newCat.trim()) return
-    const newItem: Category = { id: String(Date.now()), name: newCat.trim(), itemCount: 0 }
+    const catName = newCat.trim()
+    try {
+      const res = await api.menu.createCategory(catName)
+      if (res.success && res.category) {
+        const item: Category = {
+          id: res.category.id || res.category._id,
+          name: res.category.name,
+          itemCount: 0,
+        }
+        setCats([...cats, item])
+        setNewCat("")
+        return
+      }
+    } catch (err) {
+      console.warn("API createCategory failed, adding locally:", err)
+    }
+
+    const newItem: Category = { id: String(Date.now()), name: catName, itemCount: 0 }
     setCats([...cats, newItem])
     setNewCat("")
   }

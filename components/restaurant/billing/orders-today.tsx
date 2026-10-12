@@ -11,27 +11,60 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { orders } from "@/lib/data"
+import { orders as initialOrders, type Order } from "@/lib/data"
 import { ClipboardList, DollarSign, ShoppingBag, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react"
-
-// Get all unique dates from orders, sorted newest first
-const allDates = [...new Set(orders.map((o) => o.date))].sort((a, b) => b.localeCompare(a))
+import { useEffect } from "react"
+import { api } from "@/lib/api"
 
 function formatDate(dateStr: string) {
-  const d = new Date(dateStr + "T00:00:00")
+  if (!dateStr) return ""
+  const d = new Date(dateStr.includes("T") ? dateStr : dateStr + "T00:00:00")
   return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })
 }
 
 export function OrdersTodayPage() {
-  const [selectedDate, setSelectedDate] = useState(allDates[0] ?? "")
+  const [ordersList, setOrdersList] = useState<Order[]>(initialOrders)
+
+  useEffect(() => {
+    api.orders
+      .getAll()
+      .then((res) => {
+        if (res.success && res.orders && res.orders.length > 0) {
+          setOrdersList(
+            res.orders.map((o) => ({
+              id: o.orderId || o._id,
+              items: o.items || [],
+              paymentMethod: o.paymentMethod || "Cash",
+              total: o.total || 0,
+              date: (o.date || o.createdAt || "").substring(0, 10),
+              status: o.status || "Completed",
+            }))
+          )
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const allDates = useMemo(
+    () => [...new Set(ordersList.map((o) => o.date).filter(Boolean))].sort((a, b) => b.localeCompare(a)),
+    [ordersList]
+  )
+
+  const [selectedDate, setSelectedDate] = useState("")
+
+  useEffect(() => {
+    if (allDates.length > 0 && !selectedDate) {
+      setSelectedDate(allDates[0])
+    }
+  }, [allDates, selectedDate])
 
   const dateIndex = allDates.indexOf(selectedDate)
   const canGoNext = dateIndex > 0
   const canGoPrev = dateIndex < allDates.length - 1
 
   const filteredOrders = useMemo(
-    () => orders.filter((o) => o.date === selectedDate),
-    [selectedDate]
+    () => ordersList.filter((o) => o.date === selectedDate),
+    [ordersList, selectedDate]
   )
   const totalRevenue = filteredOrders.reduce((sum, o) => sum + o.total, 0)
   const avgOrder = filteredOrders.length > 0 ? Math.round(totalRevenue / filteredOrders.length) : 0

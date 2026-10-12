@@ -22,10 +22,13 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { users as initialUsers, type User } from "@/lib/data"
-import { Pencil, Trash2, Plus, UserPlus } from "lucide-react"
+import { Pencil, Trash2, Plus, UserPlus, Loader2 } from "lucide-react"
+import { useEffect } from "react"
+import { api } from "@/lib/api"
 
 export function UsersPage() {
   const [usersList, setUsersList] = useState<User[]>(initialUsers)
+  const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -33,22 +36,82 @@ export function UsersPage() {
     password: "",
   })
 
-  const addUser = () => {
-    if (!form.name.trim() || !form.email.trim() || !form.role || !form.password) return
-    const newUser: User = {
-      id: String(Date.now()),
-      name: form.name.trim(),
-      email: form.email.trim(),
-      role: form.role as "Admin" | "Billing",
-      status: "Active",
+  const fetchUsers = async () => {
+    try {
+      setLoading(true)
+      const res = await api.users.getAll()
+      if (res.success && res.users) {
+        setUsersList(
+          res.users.map((u) => ({
+            id: u.id || u._id,
+            name: u.name,
+            email: u.email,
+            role: (u.role?.charAt(0).toUpperCase() + u.role?.slice(1).toLowerCase()) as "Admin" | "Billing",
+            status: u.status || "Active",
+          }))
+        )
+      }
+    } catch (err) {
+      console.warn("Could not fetch users from API, using local state:", err)
+    } finally {
+      setLoading(false)
     }
-    setUsersList([...usersList, newUser])
-    setForm({ name: "", email: "", role: "", password: "" })
   }
 
-  const deleteUser = (id: string) => setUsersList(usersList.filter((u) => u.id !== id))
+  useEffect(() => {
+    fetchUsers()
+  }, [])
 
-  const toggleStatus = (id: string) => {
+  const addUser = async () => {
+    if (!form.name.trim() || !form.email.trim() || !form.role || !form.password) return
+    try {
+      const res = await api.users.create({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role: form.role,
+      })
+      if (res.success && res.user) {
+        const newUser: User = {
+          id: res.user.id || res.user._id,
+          name: res.user.name,
+          email: res.user.email,
+          role: (res.user.role?.charAt(0).toUpperCase() + res.user.role?.slice(1).toLowerCase()) as "Admin" | "Billing",
+          status: res.user.status || "Active",
+        }
+        setUsersList([newUser, ...usersList])
+        setForm({ name: "", email: "", role: "", password: "" })
+        return
+      }
+    } catch (err: any) {
+      console.warn("API create user failed, applying locally:", err)
+      const newUser: User = {
+        id: String(Date.now()),
+        name: form.name.trim(),
+        email: form.email.trim(),
+        role: form.role as "Admin" | "Billing",
+        status: "Active",
+      }
+      setUsersList([...usersList, newUser])
+      setForm({ name: "", email: "", role: "", password: "" })
+    }
+  }
+
+  const deleteUser = async (id: string) => {
+    try {
+      await api.users.delete(id)
+    } catch (err) {
+      console.warn("API delete user failed, deleting locally:", err)
+    }
+    setUsersList(usersList.filter((u) => u.id !== id))
+  }
+
+  const toggleStatus = async (id: string) => {
+    try {
+      await api.users.toggleStatus(id)
+    } catch (err) {
+      console.warn("API toggle user status failed, updating locally:", err)
+    }
     setUsersList(
       usersList.map((u) =>
         u.id === id ? { ...u, status: u.status === "Active" ? "Inactive" : "Active" } : u

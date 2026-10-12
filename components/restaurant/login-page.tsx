@@ -20,22 +20,25 @@ export function LoginPage() {
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setIsLoading(true)
 
-    setTimeout(() => {
-      const result = login(email, password)
+    try {
+      const result = await login(email, password)
       if (!result.success) {
-        setError(
+        setError(result.error || (
           selectedRole === "admin"
             ? "Invalid credentials. Try admin@foodhub.com / admin123"
             : "Invalid credentials. Try billing@foodhub.com / billing123"
-        )
+        ))
       }
+    } catch (err: any) {
+      setError(err.message || "Failed to log in. Please try again.")
+    } finally {
       setIsLoading(false)
-    }, 600)
+    }
   }
 
   const handleRoleSwitch = (role: LoginRole) => {

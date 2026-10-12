@@ -1,7 +1,8 @@
 "use client"
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import type { CartItem, FoodItem } from "./data"
+import { api, setAuthToken, removeAuthToken, getAuthToken } from "./api"
 
 type UserRole = "admin" | "billing"
 type AdminPage = "dashboard" | "categories" | "food-items" | "sales" | "reports" | "users" | "settings"
@@ -12,7 +13,7 @@ interface AppState {
   isLoggedIn: boolean
   userRole: UserRole | null
   userName: string
-  login: (email: string, password: string) => { success: boolean; error?: string }
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   logout: () => void
   activeSection: "admin" | "billing"
   setActiveSection: (section: "admin" | "billing") => void
@@ -31,7 +32,7 @@ interface AppState {
 
 const AppContext = createContext<AppState | null>(null)
 
-const CREDENTIALS = [
+const FALLBACK_CREDENTIALS = [
   { email: "admin@foodhub.com", password: "admin123", name: "Rajesh Kumar", role: "admin" as UserRole },
   { email: "billing@foodhub.com", password: "billing123", name: "Priya Sharma", role: "billing" as UserRole },
 ]
@@ -46,25 +47,69 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([])
   const [triggerPayment, setTriggerPayment] = useState(false)
 
-  const login = (email: string, password: string) => {
-    const user = CREDENTIALS.find((c) => c.email === email && c.password === password)
-    if (user) {
-      setIsLoggedIn(true)
-      setUserRole(user.role)
-      setUserName(user.name)
-      setActiveSection(user.role === "admin" ? "admin" : "billing")
-      setCurrentPage(user.role === "admin" ? "dashboard" : "pos")
-      return { success: true }
+  // Verify existing token on startup
+  useEffect(() => {
+    const token = getAuthToken();
+    if (token) {
+      api.auth
+        .getMe()
+        .then((res) => {
+          if (res.success && res.user) {
+            const role = (res.user.role?.toLowerCase() === "admin" ? "admin" : "billing") as UserRole
+            setIsLoggedIn(true)
+            setUserRole(role)
+            setUserName(res.user.name)
+            setActiveSection(role === "admin" ? "admin" : "billing")
+            setCurrentPage(role === "admin" ? "dashboard" : "pos")
+          }
+        })
+        .catch(() => {
+          removeAuthToken()
+        })
     }
-    return { success: false, error: "Invalid email or password" }
+  }, [])
+
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      // 1. Try real backend API
+      const res = await api.auth.login({ email, password });
+      if (res.success && res.token) {
+        setAuthToken(res.token)
+        const role = (res.user.role?.toLowerCase() === "admin" ? "admin" : "billing") as UserRole
+        setIsLoggedIn(true)
+        setUserRole(role)
+        setUserName(res.user.name)
+        setActiveSection(role === "admin" ? "admin" : "billing")
+        setCurrentPage(role === "admin" ? "dashboard" : "pos")
+        return { success: true }
+      }
+      return { success: false, error: res.message || "Invalid credentials" }
+    } catch (err: any) {
+      console.warn("Backend API unavailable or error:", err.message);
+
+      // Fallback to local credentials if backend is momentarily unreachable
+      const fallback = FALLBACK_CREDENTIALS.find((c) => c.email === email && c.password === password)
+      if (fallback) {
+        setIsLoggedIn(true)
+        setUserRole(fallback.role)
+        setUserName(fallback.name)
+        setActiveSection(fallback.role === "admin" ? "admin" : "billing")
+        setCurrentPage(fallback.role === "admin" ? "dashboard" : "pos")
+        return { success: true }
+      }
+      return { success: false, error: err.message || "Invalid email or password" }
+    }
   }
+
   const logout = () => {
+    removeAuthToken()
     setIsLoggedIn(false)
     setUserRole(null)
     setUserName("")
     setCurrentPage("dashboard")
     setCart([])
   }
+
   const addToCart = (item: FoodItem) => {
     setCart((prev) => {
       const existing = prev.find((c) => c.id === item.id)
@@ -74,9 +119,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return [...prev, { ...item, quantity: 1 }]
     })
   }
+
   const removeFromCart = (itemId: string) => {
     setCart((prev) => prev.filter((c) => c.id !== itemId))
   }
+
   const updateQuantity = (itemId: string, quantity: number) => {
     if (quantity <= 0) {
       removeFromCart(itemId)
@@ -84,7 +131,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     setCart((prev) => prev.map((c) => (c.id === itemId ? { ...c, quantity } : c)))
   }
+
   const clearCart = () => setCart([])
+
   return (
     <AppContext.Provider
       value={{

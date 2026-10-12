@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { foodItems } from "@/lib/data"
+import { foodItems as initialFoodItems, type FoodItem } from "@/lib/data"
+import { api } from "@/lib/api"
 import {
   Plus,
   Minus,
@@ -28,11 +29,30 @@ type ViewState = "pos" | "payment" | "success"
 
 export function POSPage() {
   const { cart, addToCart, removeFromCart, updateQuantity, clearCart, selectedCategory, triggerPayment, setTriggerPayment } = useAppStore()
+  const [items, setItems] = useState<FoodItem[]>(initialFoodItems)
   const [paymentMethod, setPaymentMethod] = useState("Cash")
   const [discount, setDiscount] = useState("")
   const [gstEnabled, setGstEnabled] = useState(true)
   const [viewState, setViewState] = useState<ViewState>("pos")
   const [customerName, setCustomerName] = useState("")
+
+  useEffect(() => {
+    api.menu.getItems().then((res) => {
+      if (res.success && res.items && res.items.length > 0) {
+        setItems(
+          res.items.map((i) => ({
+            id: i.id || i._id,
+            name: i.name,
+            price: i.price,
+            category: i.category,
+            available: i.available !== undefined ? i.available : true,
+            description: i.description || "",
+            image: i.image || "/placeholder.svg",
+          }))
+        )
+      }
+    }).catch(() => {})
+  }, [])
 
   // CartCTA outside this component triggers payment view via store
   useEffect(() => {
@@ -44,8 +64,8 @@ export function POSPage() {
 
   const filteredItems =
     selectedCategory === "All"
-      ? foodItems.filter((i) => i.available)
-      : foodItems.filter((i) => i.category === selectedCategory && i.available)
+      ? items.filter((i) => i.available)
+      : items.filter((i) => i.category === selectedCategory && i.available)
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const discountAmount = discount ? parseFloat(discount) || 0 : 0
@@ -62,7 +82,20 @@ export function POSPage() {
     setViewState("payment")
   }
 
-  const handleConfirmPayment = () => {
+  const handleConfirmPayment = async () => {
+    try {
+      await api.orders.create({
+        items: cart.map((c) => ({
+          name: c.name,
+          quantity: c.quantity,
+          price: c.price,
+        })),
+        paymentMethod,
+        total: Math.round(finalAmount),
+      })
+    } catch (err) {
+      console.warn("Could not save order to API, completed in UI:", err)
+    }
     setViewState("success")
   }
 
