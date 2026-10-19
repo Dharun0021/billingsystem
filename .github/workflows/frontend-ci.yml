@@ -53,7 +53,7 @@ jobs:
           context: .
           push: ${{ github.event_name == 'push' }}
           build-args: |
-            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL || 'http://13.236.180.215:5000/api' }}
+            NEXT_PUBLIC_API_URL=/api
           tags: |
             dharunk021/billingsytem:latest
             dharunk021/billingsytem:${{ github.sha }}
