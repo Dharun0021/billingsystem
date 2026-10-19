@@ -1,7 +1,6 @@
 function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL || "/api";
 }
-
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("billing_auth_token");

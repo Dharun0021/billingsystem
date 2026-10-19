@@ -10,6 +10,7 @@ on:
       - "pages/**"
       - "src/**"
       - "components/**"
+      - "lib/**"
       - "public/**"
       - "package.json"
       - "package-lock.json"
