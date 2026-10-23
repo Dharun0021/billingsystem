@@ -13,6 +13,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check AWS secrets are available
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          test -n "$AWS_ACCESS_KEY_ID" || { echo "ACCESS_KEY_ID is missing"; exit 1; }
+          test -n "$AWS_SECRET_ACCESS_KEY" || { echo "SECRET_ACCESS_KEY is missing"; exit 1; }
+          test -n "$AWS_REGION" || { echo "AWS_REGION is missing"; exit 1; }
+          echo "All three AWS secrets are available."
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -21,8 +32,7 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Verify AWS identity
-        run: |
-          aws sts get-caller-identity
+        run: aws sts get-caller-identity
 
       - name: Send test command to EC2 through SSM
         id: send-command
@@ -50,21 +60,3 @@ jobs:
             --instance-id i-0616bee576adfc334 \
             --query '{Status:Status,Output:StandardOutputContent}' \
             --output json
-
-                  - name: Check AWS secrets are available
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        run: |
-          test -n "$AWS_ACCESS_KEY_ID" \
-            && echo "Access key ID secret is present" \
-            || (echo "Access key ID secret is EMPTY"; exit 1)
-
-          test -n "$AWS_SECRET_ACCESS_KEY" \
-            && echo "Secret access key is present" \
-            || (echo "Secret access key is EMPTY"; exit 1)
-
-          test -n "$AWS_REGION" \
-            && echo "AWS region secret is present" \
-            || (echo "AWS region secret is EMPTY"; exit 1)
