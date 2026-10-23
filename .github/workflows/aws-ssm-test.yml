@@ -50,3 +50,21 @@ jobs:
             --instance-id i-0616bee576adfc334 \
             --query '{Status:Status,Output:StandardOutputContent}' \
             --output json
+
+                  - name: Check AWS secrets are available
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          test -n "$AWS_ACCESS_KEY_ID" \
+            && echo "Access key ID secret is present" \
+            || (echo "Access key ID secret is EMPTY"; exit 1)
+
+          test -n "$AWS_SECRET_ACCESS_KEY" \
+            && echo "Secret access key is present" \
+            || (echo "Secret access key is EMPTY"; exit 1)
+
+          test -n "$AWS_REGION" \
+            && echo "AWS region secret is present" \
+            || (echo "AWS region secret is EMPTY"; exit 1)
