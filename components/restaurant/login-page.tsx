@@ -62,7 +62,7 @@ export function LoginPage() {
             <UtensilsCrossed className="h-8 w-8 text-primary-foreground" />
           </div>
           <div className="text-center">
-            <h1 className="text-3xl font-bold text-foreground tracking-tight">FoodHub</h1>
+            <h1 className="text-3xl font-bold text-foreground tracking-tight">FoodHubDHARUN</h1>
             <p className="text-sm text-muted-foreground mt-1">Restaurant Management System</p>
           </div>
         </div>
